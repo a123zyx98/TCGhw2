@@ -1,0 +1,2 @@
+gogui-twogtp -white white.exe -black black.exe -games 1 -alternate -size 9 -komi 7 -verbose -auto
+G
