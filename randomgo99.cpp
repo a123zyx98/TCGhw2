@@ -395,11 +395,56 @@ int rand_pick_move(int num_legal_moves, int MoveList[HISTORYLENGTH]) {
     }
 }
 /*
+ * This function simlates the rand_move a single game.
+ * */
+int rand_simulate(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int game_length, int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE]){
+	
+	int ori_turn = turn;
+	int MoveList[HISTORYLENGTH];
+	int return_move,num_legal_moves;
+	bool passornot[2]={false,false};
+	while(!(passornot[0]&&passornot[1]){
+		turn = (turn%2)+1;
+		num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList))!=0
+		if(num_legal_moves == 0) passornot[turn - 1] = true;
+		else passornot[turn - 1] = true;
+		if(passornot[0] && passornot[1])break;
+        return_move = rand_pick_move(num_legal_moves,MoveList);
+		do_move(Board,turn,return_move)
+		game_length ++;
+	}
+	int result = final_score(Board) - _komi;
+	if(result == 0) return result;
+	else if(result > 0 ^ ori_turn == BLACK) return -1;
+	else return 1;
+}
+/*
  * This function selects one move with Monte-Carlo pure search.
  * */
-int MCS_pure_move(int num_legal_moves, int MoveList[HISTORYLENGTH]), clock_t end_t){
+int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, int MoveList[HISTORYLENGTH], clock_t end_t, int turn, int game_length, int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE]){
     if(num_legal_moves == 0)return 0;
-    
+    int record[num_legal_moves];
+	for(int i=0;i<num_legal_moves;i++) record=0;
+	while(clock() < end_t){
+		for(int i=0;i<num_legal_moves;i++){
+			for(int j=0;j<BOUNDARYSIZE;j++){
+				for(int k=0;k<BOUNDARYSIZE;k++){
+					GameRecord[game_length][j][k] = Board[j][k];
+				}
+			}
+			do_move(GameRecord,turn,MoveList[i])
+			record[i] = record[i] + rand_simulate(newBoard, turn, game_length+1, GameRecord);
+		}
+	}
+    int max = -INF;
+	int max_index = -1;
+	for(int i=0;i<num_legal_moves;i++){
+		if(record[i]>max){
+			max = record[i];
+			max_index = i;
+		}
+	}
+	return MoveList[max_index];
 }
 
 /*
@@ -447,7 +492,7 @@ int genmove(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int time_limit, int
     num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
 
     //return_move = rand_pick_move(num_legal_moves, MoveList);
-    return_move = MCS_pure_move(num_legal_moves, MoveList,end_t);
+    return_move = MCS_pure_move(Board,num_legal_moves, MoveList, end_t, turn, game_length, GameRecord);
 
     do_move(Board, turn, return_move);
 
