@@ -46,7 +46,7 @@ double _komi =  DEFAULTKOMI;
 const int DirectionX[MAXDIRECTION] = {-1, 0, 1, 0};
 const int DirectionY[MAXDIRECTION] = { 0, 1, 0,-1};
 const char LabelX[]="0ABCDEFGHJ";
-\
+
 void reset(int Board[BOUNDARYSIZE][BOUNDARYSIZE]);
 int find_liberty(int X, int Y, int label, int Board[BOUNDARYSIZE][BOUNDARYSIZE], int ConnectBoard[BOUNDARYSIZE][BOUNDARYSIZE]);
 void count_liberty(int X, int Y, int Board[BOUNDARYSIZE][BOUNDARYSIZE], int Liberties[MAXDIRECTION]);
@@ -85,19 +85,17 @@ int find_liberty(int X, int Y, int label, int Board[BOUNDARYSIZE][BOUNDARYSIZE],
     ConnectBoard[X][Y] |= label;
     int total_liberty = 0;
     for (int d = 0 ; d < MAXDIRECTION; ++d) {
-    // Check this intersection has been visited or not
-    if ((ConnectBoard[X+DirectionX[d]][Y+DirectionY[d]] & (1<<label) )!= 0) continue;
+        // Check this intersection has been visited or not
+        if ((ConnectBoard[X+DirectionX[d]][Y+DirectionY[d]] & (1<<label) )!= 0) continue;
 
-    // Check this intersection is not visited yet
-    ConnectBoard[X+DirectionX[d]][Y+DirectionY[d]] |=(1<<label);
-    // This neighboorhood is empty
-    if (Board[X+DirectionX[d]][Y+DirectionY[d]] == EMPTY){
-        total_liberty++;
-    }
-    // This neighboorhood is self stone
-    else if (Board[X+DirectionX[d]][Y+DirectionY[d]] == Board[X][Y]) {
-        total_liberty += find_liberty(X+DirectionX[d], Y+DirectionY[d], label, Board, ConnectBoard);
-    }
+        // Check this intersection is not visited yet
+        ConnectBoard[X+DirectionX[d]][Y+DirectionY[d]] |=(1<<label);
+        // This neighboorhood is empty
+        if (Board[X+DirectionX[d]][Y+DirectionY[d]] == EMPTY)
+            total_liberty++;
+        // This neighboorhood is self stone
+        else if (Board[X+DirectionX[d]][Y+DirectionY[d]] == Board[X][Y])
+            total_liberty += find_liberty(X+DirectionX[d], Y+DirectionY[d], label, Board, ConnectBoard);
     }
     return total_liberty;
 }
@@ -108,18 +106,13 @@ int find_liberty(int X, int Y, int label, int Board[BOUNDARYSIZE][BOUNDARYSIZE],
 void count_liberty(int X, int Y, int Board[BOUNDARYSIZE][BOUNDARYSIZE], int Liberties[MAXDIRECTION]) {
     int ConnectBoard[BOUNDARYSIZE][BOUNDARYSIZE];
     // Initial the ConnectBoard
-    for (int i = 0 ; i < BOUNDARYSIZE; ++i) {
-    for (int j = 0 ; j < BOUNDARYSIZE; ++j) {
-        ConnectBoard[i][j] = 0;
-    }
-    }
+    for (int i = 0 ; i < BOUNDARYSIZE; ++i) {for (int j = 0 ; j < BOUNDARYSIZE; ++j) {ConnectBoard[i][j] = 0;}}
     // Find the same connect component and its liberity
     for (int d = 0 ; d < MAXDIRECTION; ++d) {
-    Liberties[d] = 0;
-    if (Board[X+DirectionX[d]][Y+DirectionY[d]] == BLACK ||  
-        Board[X+DirectionX[d]][Y+DirectionY[d]] == WHITE    ) {
-        Liberties[d] = find_liberty(X+DirectionX[d], Y+DirectionY[d], d, Board, ConnectBoard);
-    }
+        Liberties[d] = 0;
+        if (Board[X+DirectionX[d]][Y+DirectionY[d]] == BLACK || Board[X+DirectionX[d]][Y+DirectionY[d]] == WHITE ) {
+            Liberties[d] = find_liberty(X+DirectionX[d], Y+DirectionY[d], d, Board, ConnectBoard);
+        }
     }
 }
 
@@ -245,16 +238,15 @@ int update_board_check(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int X, int Y, int 
     }
 
     if (legal_flag == 1) {
-    // check if there is opponent piece in the neighboorhood
-    if (num_neighborhood_oppo != 0) {
-        for (int d = 0 ; d < MAXDIRECTION; ++d) {
-        // check if there is opponent component only one liberty
-        if (NeighboorhoodState[d] == OPPONENT && Liberties[d] == 1 && Board[X+DirectionX[d]][Y+DirectionY[d]]!=EMPTY) {
-            remove_piece(Board, X+DirectionX[d], Y+DirectionY[d], Board[X+DirectionX[d]][Y+DirectionY[d]]);
+        // check if there is opponent piece in the neighboorhood
+        if (num_neighborhood_oppo != 0) {
+            for (int d = 0 ; d < MAXDIRECTION; ++d) {
+                // check if there is opponent component only one liberty
+                if (NeighboorhoodState[d] == OPPONENT && Liberties[d] == 1 && Board[X+DirectionX[d]][Y+DirectionY[d]]!=EMPTY)
+                    remove_piece(Board, X+DirectionX[d], Y+DirectionY[d], Board[X+DirectionX[d]][Y+DirectionY[d]]);
+            }
         }
-        }
-    }
-    Board[X][Y] = turn;
+        Board[X][Y] = turn;
     }
 
     return (legal_flag==1)?1:0;
@@ -400,19 +392,23 @@ int rand_simulate(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int game_leng
     int MoveList[HISTORYLENGTH];
     int return_move,num_legal_moves;
     bool passornot[2]={false,false};
+	//printf("start game_length = %d\n",game_length);
     while(!(passornot[0]&&passornot[1])){
         turn = (turn%2)+1;
         num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
+		//printf("num_legal_moves = %d",num_legal_moves);
+		//getchar();getchar();
         if(num_legal_moves == 0) passornot[turn - 1] = true;
-        else passornot[turn - 1] = true;
+        else passornot[turn - 1] = false;
         if(passornot[0] && passornot[1])break;
         return_move = rand_pick_move(num_legal_moves,MoveList);
         do_move(Board,turn,return_move);
         record(Board, GameRecord, game_length+1);
+		//printf("game_length = %d",game_length);
         game_length ++;
     }
     int result = final_score(Board) - _komi;
-    if(result == 0) return result;
+    if(result == 0) return 0;
     else if(result > 0 ^ ori_turn == BLACK) return -1;
     else return 1;
 }
@@ -428,29 +424,31 @@ int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, in
         for(int i=0;i<num_legal_moves;i++){
             for(int j=0;j<BOUNDARYSIZE;j++){
                 for(int k=0;k<BOUNDARYSIZE;k++){
-                    GameRecord[game_length][j][k] = Board[j][k];
+                    GameRecord[game_length+1][j][k] = Board[j][k];
                 }
             }
-            do_move(GameRecord[game_length],turn,MoveList[i]);
+            do_move(GameRecord[game_length+1],turn,MoveList[i]);
             num_simulate ++ ;
-            record[i] = record[i] + rand_simulate(GameRecord[game_length], turn, game_length+1, GameRecord);
+			//printf("outer game_length = %d\n",game_length);
+            record[i] = record[i] + rand_simulate(GameRecord[game_length+1], turn, game_length+1, GameRecord);
         }
     }
-    printf("num_legal_moves = %d\n",num_legal_moves);
+    //printf("num_legal_moves = %d\n",num_legal_moves);
     int max = record[0];
     int max_index = 0;
     for(int i=1;i<num_legal_moves;i++){
-        printf("%d ",record[i]);
+        //printf("%d ",record[i]);
         if(record[i]>max){
             max = record[i];
             max_index = i;
         }
     }
-    printf("num_simulate = %d\n",num_simulate);
+    //printf("num_simulate = %d\n",num_simulate);
     cerr << "max_index = " << max_index << endl;
     cerr << "move = " << MoveList[max_index] << endl;
     return MoveList[max_index];
 }
+//int MCTS_move(int Board[BOUNDARYSIZE)[BOUNDARYSIZE], 
 
 /*
  * This function update the Board with put 'turn' at (x,y)
@@ -461,9 +459,9 @@ void do_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int move) {
     int move_x = (move % 100) / 10;
     int move_y = move % 10;
     if (move<100)
-		Board[move_x][move_y] = turn;
-	else 
-		update_board(Board, move_x, move_y, turn);
+        Board[move_x][move_y] = turn;
+    else 
+        update_board(Board, move_x, move_y, turn);
 }
 /* 
  * This function records the current game baord with current
@@ -764,6 +762,7 @@ void gtp_main(int display) {
         }
         gtp_final_score(Board);
     }
+	cerr << "game_length = " << game_length << endl;
     }
 }
 int main(int argc, char* argv[]) {
