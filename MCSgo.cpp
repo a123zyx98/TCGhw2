@@ -477,7 +477,10 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 	cur_node = root_node;
 	
 	int best_child;
-	double best_UCB,tmp_UCB;;
+	double best_UCB,tmp_UCB;
+	
+	int return_move;
+	int MoveList[HISTORYLENGTH];
 	
 	while(clock() < end_t){
 		//selection
@@ -494,13 +497,22 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 			cur_node = cur_node -> child[best_child];
 		}
 		//expansion
-		
+		return_move = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
+		for(int i=0;i<return_move;i++){
+			MCSNODE* new_node = (MCSNODE*)malloc(sizeof(MCSNODE));
+			new_node -> win = 0;
+			new_node -> lost = 0;
+			new_node -> visit = 0;
+			new_node -> turn = (turn%2)+1;
+			do_move(new_node -> Board, new_node -> turn, MoveList[i]);
+			cur_node -> child.push_back(new_node);
+		}
 		//simulation
+		
 		//back propagation 
 	}
 	return 0;
 }
-
 /*
  * This function update the Board with put 'turn' at (x,y)
  * where x = (move % 100) / 10 and y = move % 10.
