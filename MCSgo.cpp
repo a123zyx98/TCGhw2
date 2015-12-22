@@ -10,6 +10,8 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include <cmath>
+#include <vector>
 
 #include <stdio.h>
 
@@ -18,6 +20,8 @@
 #define COMMANDLENGTH 1000
 #define DEFAULTTIME      1
 #define DEFAULTKOMI      7
+
+#define UCBCONSTANT      2
 
 #define MAXGAMELENGTH 1000
 #define MAXSTRING       50
@@ -47,6 +51,16 @@ const int DirectionX[MAXDIRECTION] = {-1, 0, 1, 0};
 const int DirectionY[MAXDIRECTION] = { 0, 1, 0,-1};
 const char LabelX[]="0ABCDEFGHJ";
 
+typedef struct MCS_node{
+	int win;
+	int lost;
+	int draw;
+	int visit;
+	int turn;
+	int (*Board)[BOUNDARYSIZE];
+	vector <struct MCS_node*> child;
+}MCSNODE;
+
 void reset(int Board[BOUNDARYSIZE][BOUNDARYSIZE]);
 int find_liberty(int X, int Y, int label, int Board[BOUNDARYSIZE][BOUNDARYSIZE], int ConnectBoard[BOUNDARYSIZE][BOUNDARYSIZE]);
 void count_liberty(int X, int Y, int Board[BOUNDARYSIZE][BOUNDARYSIZE], int Liberties[MAXDIRECTION]);
@@ -61,6 +75,7 @@ int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, in
 void do_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int move);
 void record(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE], int game_length);
 double final_score(int Board[BOUNDARYSIZE][BOUNDARYSIZE]);
+void gtp_showboard(int Board[BOUNDARYSIZE][BOUNDARYSIZE]);
 /*
  * This function reset the board, the board intersections are labeled with 0,
  * the boundary intersections are labeled with 3.
@@ -392,19 +407,19 @@ int rand_simulate(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int game_leng
     int MoveList[HISTORYLENGTH];
     int return_move,num_legal_moves;
     bool passornot[2]={false,false};
-	//printf("start game_length = %d\n",game_length);
+    //printf("start game_length = %d\n",game_length);
     while(!(passornot[0]&&passornot[1])){
         turn = (turn%2)+1;
         num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
-		//printf("num_legal_moves = %d",num_legal_moves);
-		//getchar();getchar();
+        //printf("num_legal_moves = %d",num_legal_moves);
+        //getchar();getchar();
         if(num_legal_moves == 0) passornot[turn - 1] = true;
         else passornot[turn - 1] = false;
         if(passornot[0] && passornot[1])break;
         return_move = rand_pick_move(num_legal_moves,MoveList);
         do_move(Board,turn,return_move);
         record(Board, GameRecord, game_length+1);
-		//printf("game_length = %d",game_length);
+        //printf("game_length = %d",game_length);
         game_length ++;
     }
     int result = final_score(Board) - _komi;
@@ -429,7 +444,7 @@ int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, in
             }
             do_move(GameRecord[game_length+1],turn,MoveList[i]);
             num_simulate ++ ;
-			//printf("outer game_length = %d\n",game_length);
+            //printf("outer game_length = %d\n",game_length);
             record[i] = record[i] + rand_simulate(GameRecord[game_length+1], turn, game_length+1, GameRecord);
         }
     }
@@ -448,7 +463,43 @@ int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, in
     cerr << "move = " << MoveList[max_index] << endl;
     return MoveList[max_index];
 }
-//int MCTS_move(int Board[BOUNDARYSIZE)[BOUNDARYSIZE], 
+int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, int game_length,int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE]){
+	
+	
+	MCSNODE* cur_node;
+	MCSNODE* root_node = (MCSNODE*)malloc(sizeof(MCSNODE));
+	root_node -> win = 0;
+	root_node -> lost = 0;
+	root_node -> visit = 0;
+	root_node -> turn = turn;
+	root_node -> Board = Board;
+	gtp_showboard(root_node -> Board);
+	cur_node = root_node;
+	
+	int best_child;
+	double best_UCB,tmp_UCB;;
+	
+	while(clock() < end_t){
+		//selection
+		while(cur_node -> child.size()!=0){
+			best_UCB = (cur_node -> child[0] -> win)/(cur_node -> child[0] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[0] -> visit);
+			best_child = 0;
+			for(int i=1;i<cur_node -> child.size();i++){
+				tmp_UCB = (cur_node -> child[i] -> win)/(cur_node -> child[i] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[i] -> visit);
+				if(tmp_UCB > best_UCB){
+					best_UCB = tmp_UCB;
+					best_child = i;
+				}
+			}
+			cur_node = cur_node -> child[best_child];
+		}
+		//expansion
+		
+		//simulation
+		//back propagation 
+	}
+	return 0;
+}
 
 /*
  * This function update the Board with put 'turn' at (x,y)
@@ -479,20 +530,20 @@ void record(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int GameRecord[MAXGAMELENGTH]
  * if there is no legal move the function will return 0.
  * */
 int genmove(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int time_limit, int game_length, int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE]) {
-    clock_t start_t, end_t, now_t;
+    clock_t start_t, end_t;
     // record start time
     start_t = clock();
     // calculate the time bound
     end_t = start_t + CLOCKS_PER_SEC * time_limit;
 
-    int MoveList[HISTORYLENGTH];
-    int num_legal_moves = 0;
+
     int return_move = 0;
 
-    num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
-
+    //num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
+	
+	return_move = MCTS_move(Board, end_t, turn, game_length, GameRecord);
     //return_move = rand_pick_move(num_legal_moves, MoveList);
-    return_move = MCS_pure_move(Board,num_legal_moves, MoveList, end_t, turn, game_length, GameRecord);
+    //return_move = MCS_pure_move(Board,num_legal_moves, MoveList, end_t, turn, game_length, GameRecord);
 
     do_move(Board, turn, return_move);
     return return_move % 100;
@@ -664,9 +715,8 @@ void gtp_genmove(int Board[BOUNDARYSIZE][BOUNDARYSIZE], char Color[], int time_l
     int move = genmove(Board, turn, time_limit, game_length, GameRecord);
     int move_i, move_j;
     record(Board, GameRecord, game_length+1);
-    if (move==0) {
-    cout << "= PASS" << endl<< endl<< endl;
-    }
+    if (move==0)
+		cout << "= PASS" << endl<< endl<< endl;
     else {
     move_i = (move%100)/10;
     move_j = (move%10);
@@ -762,7 +812,7 @@ void gtp_main(int display) {
         }
         gtp_final_score(Board);
     }
-	cerr << "game_length = " << game_length << endl;
+    cerr << "game_length = " << game_length << endl;
     }
 }
 int main(int argc, char* argv[]) {
