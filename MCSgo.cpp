@@ -61,7 +61,7 @@ typedef struct MCS_node{
     int visit;
 	int move;
     int turn;
-    int (*Board)[BOUNDARYSIZE];
+    int Board[BOUNDARYSIZE][BOUNDARYSIZE];
     vector <struct MCS_node*> child;
 }MCSNODE;
 
@@ -479,8 +479,7 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
     root_node -> visit = 0;
 	root_node -> move = 0;
     root_node -> turn = turn;
-    root_node -> Board = Board;
-    gtp_showboard(root_node -> Board);
+    for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)root_node -> Board[x][y] = Board[x][y];
     cur_node = root_node;
     
     int best_child;
@@ -502,7 +501,9 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 		depth = game_length;
 		
         //selection
+		cerr << "selection";
         while(cur_node -> child.size()!=0){
+            cerr << "start" << endl;
             best_UCB = (cur_node -> child[0] -> win)/(cur_node -> child[0] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[0] -> visit);
             best_child = 0;
             for(int i=1;i<cur_node -> child.size();i++){
@@ -515,7 +516,7 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
             cur_node = cur_node -> child[best_child];
 			depth ++;
         }
-		
+		cerr << "expansion";
         //expansion
         num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
         for(int i=0;i<num_legal_moves;i++){
@@ -525,15 +526,16 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
             new_node -> visit = 0;
 			new_node -> move = MoveList[i];
             new_node -> turn = (cur_node -> turn%2)+1;
+            for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)new_node -> Board[x][y] = cur_node -> Board[x][y];
             do_move(new_node -> Board, new_node -> turn, MoveList[i]);
             cur_node -> child.push_back(new_node);
         }
     
         //simulation
-		e_t = clock() + CLOCKS_PER_SEC* SIMULATETIME;
-			for(int i=0;i<cur_node -> child.size();i++){
+		cerr << "simulation";
+		for(int i=0;i<cur_node -> child.size();i++){
 				turn = cur_node -> child[i] -> turn;
-				for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;x++)CurBoard[x][y] = cur_node -> child[i] ->Board[x][y];
+				for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)CurBoard[x][y] = cur_node -> child[i] ->Board[x][y];
 				score = 0.0;
 				for(int j=0;j<ONCESIMULATE;j++){
 					do{
@@ -557,23 +559,27 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 				BorW = 2*cur_node -> child[i] -> turn - 3;
 				cur_node -> child[i] -> win = cur_node -> child[i] -> win + BorW*score;
 				cur_node -> child[i] -> visit = visit;
-			}
-			
+		}
+		
         //back propagation 
+		cerr << "propagation" << endl;
 		while(cur_node != NULL){
 			if(cur_node -> turn == BLACK) cur_node -> win = cur_node -> win + score;
 			else cur_node -> win = cur_node -> win - score;
 			cur_node -> visit = cur_node -> visit + visit;
+            if(cur_node -> parent == NULL)break;
 			cur_node = cur_node -> parent;
 		}
     }
+    cerr << "done" << endl;
 	double best_score = root_node -> child[0] -> win;
 	int return_move = root_node -> child[0] -> move;
-	for(int i=0;root_node -> child.size();i++){
+	for(int i=0;i<root_node -> child.size();i++){
 		if(root_node -> child[i] -> win > best_score)
 			return_move = root_node -> child[i] -> move;
 	}
     return return_move;
+    return 0;
 }
 /*
  * This function update the Board with put 'turn' at (x,y)
