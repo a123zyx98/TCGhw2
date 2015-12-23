@@ -6,6 +6,7 @@
  * 2015 Nov. Hung-Jui Chang
  * */
 #include <iostream>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -18,9 +19,12 @@
 #define BOARDSIZE        9
 #define BOUNDARYSIZE    11
 #define COMMANDLENGTH 1000
-#define DEFAULTTIME      1
+#define DEFAULTTIME      2
+#define SIMULATETIME     1
+#define ONCESIMULATE   100
 #define DEFAULTKOMI      7
 
+#define SAFEMOVE        20
 #define UCBCONSTANT      2
 
 #define MAXGAMELENGTH 1000
@@ -52,13 +56,13 @@ const int DirectionY[MAXDIRECTION] = { 0, 1, 0,-1};
 const char LabelX[]="0ABCDEFGHJ";
 
 typedef struct MCS_node{
-	int win;
-	int lost;
-	int draw;
-	int visit;
-	int turn;
-	int (*Board)[BOUNDARYSIZE];
-	vector <struct MCS_node*> child;
+    struct MCS_node* parent;
+    double win;
+    int visit;
+	int move;
+    int turn;
+    int (*Board)[BOUNDARYSIZE];
+    vector <struct MCS_node*> child;
 }MCSNODE;
 
 void reset(int Board[BOUNDARYSIZE][BOUNDARYSIZE]);
@@ -284,6 +288,7 @@ int gen_legal_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int game_len
     bool eat_move = 0;
     for (int x = 1 ; x <= BOARDSIZE; ++x) {
     for (int y = 1 ; y <= BOARDSIZE; ++y) {
+		if(game_length < SAFEMOVE &&( x == 1 || y == 1 || x == BOARDSIZE || y == BOARDSIZE))continue;
         // check if current 
         if (Board[x][y] == 0) {
             // check the liberty of the neighborhood intersections
@@ -464,54 +469,111 @@ int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, in
     return MoveList[max_index];
 }
 int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, int game_length,int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE]){
+    
+	int depth;
+    
+    MCSNODE* cur_node;
+    MCSNODE* root_node = (MCSNODE*)malloc(sizeof(MCSNODE));
+    root_node -> parent = NULL;
+    root_node -> win = 0;
+    root_node -> visit = 0;
+	root_node -> move = 0;
+    root_node -> turn = turn;
+    root_node -> Board = Board;
+    gtp_showboard(root_node -> Board);
+    cur_node = root_node;
+    
+    int best_child;
+    double best_UCB,tmp_UCB;
+    
+    int num_legal_moves;
+    int MoveList[HISTORYLENGTH];
+    
+    bool move_check;
+    int move[2];
+	clock_t s_t, e_t;
+	int CurBoard[BOUNDARYSIZE][BOUNDARYSIZE];
+	vector<int> rand_array;
+	for(int i=0;i<BOARDSIZE*BOARDSIZE;i++)rand_array.push_back(10*(i/9)+i%9+11);
+	double score;
+	int BorW,visit;
 	
-	
-	MCSNODE* cur_node;
-	MCSNODE* root_node = (MCSNODE*)malloc(sizeof(MCSNODE));
-	root_node -> win = 0;
-	root_node -> lost = 0;
-	root_node -> visit = 0;
-	root_node -> turn = turn;
-	root_node -> Board = Board;
-	gtp_showboard(root_node -> Board);
-	cur_node = root_node;
-	
-	int best_child;
-	double best_UCB,tmp_UCB;
-	
-	int return_move;
-	int MoveList[HISTORYLENGTH];
-	
-	while(clock() < end_t){
-		//selection
-		while(cur_node -> child.size()!=0){
-			best_UCB = (cur_node -> child[0] -> win)/(cur_node -> child[0] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[0] -> visit);
-			best_child = 0;
-			for(int i=1;i<cur_node -> child.size();i++){
-				tmp_UCB = (cur_node -> child[i] -> win)/(cur_node -> child[i] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[i] -> visit);
-				if(tmp_UCB > best_UCB){
-					best_UCB = tmp_UCB;
-					best_child = i;
-				}
-			}
-			cur_node = cur_node -> child[best_child];
-		}
-		//expansion
-		return_move = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
-		for(int i=0;i<return_move;i++){
-			MCSNODE* new_node = (MCSNODE*)malloc(sizeof(MCSNODE));
-			new_node -> win = 0;
-			new_node -> lost = 0;
-			new_node -> visit = 0;
-			new_node -> turn = (turn%2)+1;
-			do_move(new_node -> Board, new_node -> turn, MoveList[i]);
-			cur_node -> child.push_back(new_node);
-		}
-		//simulation
+    while(clock() < end_t){
+		depth = game_length;
 		
-		//back propagation 
+        //selection
+        while(cur_node -> child.size()!=0){
+            best_UCB = (cur_node -> child[0] -> win)/(cur_node -> child[0] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[0] -> visit);
+            best_child = 0;
+            for(int i=1;i<cur_node -> child.size();i++){
+                tmp_UCB = (cur_node -> child[i] -> win)/(cur_node -> child[i] -> visit) + sqrt(UCBCONSTANT*log(cur_node -> visit)/cur_node -> child[i] -> visit);
+                if(tmp_UCB > best_UCB){
+                    best_UCB = tmp_UCB;
+                    best_child = i;
+                }
+            }
+            cur_node = cur_node -> child[best_child];
+			depth ++;
+        }
+		
+        //expansion
+        num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
+        for(int i=0;i<num_legal_moves;i++){
+            MCSNODE* new_node = (MCSNODE*)malloc(sizeof(MCSNODE));
+            new_node -> parent = cur_node;
+            new_node -> win = 0;
+            new_node -> visit = 0;
+			new_node -> move = MoveList[i];
+            new_node -> turn = (cur_node -> turn%2)+1;
+            do_move(new_node -> Board, new_node -> turn, MoveList[i]);
+            cur_node -> child.push_back(new_node);
+        }
+    
+        //simulation
+		e_t = clock() + CLOCKS_PER_SEC* SIMULATETIME;
+			for(int i=0;i<cur_node -> child.size();i++){
+				turn = cur_node -> child[i] -> turn;
+				for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;x++)CurBoard[x][y] = cur_node -> child[i] ->Board[x][y];
+				score = 0.0;
+				for(int j=0;j<ONCESIMULATE;j++){
+					do{
+						random_shuffle(rand_array.begin(), rand_array.end());
+						move_check = false;
+						for(int i=0;i<rand_array.size();i++){
+							if((update_board_check(CurBoard, rand_array[i]/10, rand_array[i]%10, turn))==1){
+								move_check = true;
+								if(move[turn] == rand_array[i]) continue;
+								move[turn] = rand_array[i];
+								break;
+							}
+						}
+						if(!move_check)move[turn] = 0;
+						turn = (turn%2)+1;
+						depth ++;
+					}while(!(move[0]==0&&move[1]==0) && depth < HISTORYLENGTH);
+					score = score + final_score(CurBoard);
+					visit = visit + 1;
+				}
+				BorW = 2*cur_node -> child[i] -> turn - 3;
+				cur_node -> child[i] -> win = cur_node -> child[i] -> win + BorW*score;
+				cur_node -> child[i] -> visit = visit;
+			}
+			
+        //back propagation 
+		while(cur_node != NULL){
+			if(cur_node -> turn == BLACK) cur_node -> win = cur_node -> win + score;
+			else cur_node -> win = cur_node -> win - score;
+			cur_node -> visit = cur_node -> visit + visit;
+			cur_node = cur_node -> parent;
+		}
+    }
+	double best_score = root_node -> child[0] -> win;
+	int return_move = root_node -> child[0] -> move;
+	for(int i=0;root_node -> child.size();i++){
+		if(root_node -> child[i] -> win > best_score)
+			return_move = root_node -> child[i] -> move;
 	}
-	return 0;
+    return return_move;
 }
 /*
  * This function update the Board with put 'turn' at (x,y)
@@ -552,8 +614,8 @@ int genmove(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int time_limit, int
     int return_move = 0;
 
     //num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
-	
-	return_move = MCTS_move(Board, end_t, turn, game_length, GameRecord);
+    
+    return_move = MCTS_move(Board, end_t, turn, game_length, GameRecord);
     //return_move = rand_pick_move(num_legal_moves, MoveList);
     //return_move = MCS_pure_move(Board,num_legal_moves, MoveList, end_t, turn, game_length, GameRecord);
 
@@ -728,7 +790,7 @@ void gtp_genmove(int Board[BOUNDARYSIZE][BOUNDARYSIZE], char Color[], int time_l
     int move_i, move_j;
     record(Board, GameRecord, game_length+1);
     if (move==0)
-		cout << "= PASS" << endl<< endl<< endl;
+        cout << "= PASS" << endl<< endl<< endl;
     else {
     move_i = (move%100)/10;
     move_j = (move%10);
