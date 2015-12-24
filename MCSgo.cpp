@@ -19,7 +19,7 @@
 #define BOARDSIZE        9
 #define BOUNDARYSIZE    11
 #define COMMANDLENGTH 1000
-#define DEFAULTTIME      2
+#define DEFAULTTIME     10
 #define SIMULATETIME     1
 #define ONCESIMULATE    20
 #define DEFAULTKOMI      7
@@ -476,7 +476,7 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
     
     MCSNODE* cur_node;
     MCSNODE root_node;
-   // cout << root_node << endl;
+
     root_node.parent = NULL;
     root_node.win = 0.0;
     root_node.win2 = 0.0;
@@ -542,9 +542,13 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 		for(int i=0;i<cur_node -> child.size();i++){
                 visit = 0.0; win = 0.0; win2 = 0.0;
 				for(int j=0;j<ONCESIMULATE;j++){
+                    cerr << "i = " << i << endl;
+                    cerr << "pre copy" << endl;;
+                    cerr << cur_node << endl;
+                    cerr << cur_node -> child.size() << endl;
+
 				    for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)CurBoard[x][y] = cur_node -> child[i].Board[x][y];
-                    gtp_showboard(CurBoard);
-                    getchar();getchar();
+                    cerr << "copy" << endl;;
 				    turn = cur_node -> child[i].turn;
                     move[0] = -1; move[1] = -1;
                     tmp_depth = depth;
@@ -552,11 +556,11 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 					do{
 						random_shuffle(rand_array.begin(), rand_array.end());
 						move_check = false;
-						for(int i=0;i<rand_array.size();i++){
-							if(move[turn] == rand_array[i]) continue;
-							if((update_board_check(CurBoard, rand_array[i]/10, rand_array[i]%10, turn))==1){
+						for(int k=0;k<rand_array.size();k++){
+							if(move[turn] == rand_array[k]) continue;
+							if((update_board_check(CurBoard, rand_array[k]/10, rand_array[k]%10, turn))==1){
 								move_check = true;
-								move[turn] = rand_array[i];
+								move[turn] = rand_array[k];
 								break;
 							}
 						}
@@ -565,11 +569,10 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 						turn = (turn%2)+1;
 						tmp_depth ++;
 					}while(!(move[0]==0&&move[1]==0) && tmp_depth < HISTORYLENGTH);
-                    gtp_showboard(CurBoard);
-                    getchar();getchar();
                     score = final_score(CurBoard);
+
                     cerr << "score = " << score;
-					if(score > 17){
+					/*if(score > 17){
                         win = win + 1.0;
                         win2 = win2 + 1.0;
                     }
@@ -584,7 +587,7 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
                     else{
                         win = win + 0.25;
                         win2 = win2 + 0.0625;
-                    }
+                    }*/
 					visit = visit + 1;
                     cerr << "test" ;
 				}
@@ -760,6 +763,14 @@ void gtp_undo(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int game_length, int GameRe
     cout << "= " << endl << endl;
 }
 void gtp_showboard(int Board[BOUNDARYSIZE][BOUNDARYSIZE]) {
+    for(int i=0;i<BOUNDARYSIZE;i++){
+        for(int j=0;j<BOUNDARYSIZE;j++){
+            cerr << Board[i][j] << " ";
+        }
+        cerr << endl;
+    }   
+}
+/*void gtp_showboard(int Board[BOUNDARYSIZE][BOUNDARYSIZE]) {
     for (int i = 1; i <=BOARDSIZE; ++i) {
     cout << "#";
     cout <<10-i;
@@ -778,7 +789,7 @@ void gtp_showboard(int Board[BOUNDARYSIZE][BOUNDARYSIZE]) {
     cout << endl;
     cout << endl;
 
-}
+}*/
 void gtp_protocol_version() {
     cout <<"= 2"<<endl<< endl;
 }
