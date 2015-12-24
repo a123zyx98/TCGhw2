@@ -19,7 +19,7 @@
 #define BOARDSIZE        9
 #define BOUNDARYSIZE    11
 #define COMMANDLENGTH 1000
-#define DEFAULTTIME     10
+#define DEFAULTTIME      2
 #define SIMULATETIME     1
 #define ONCESIMULATE    20
 #define DEFAULTKOMI      7
@@ -58,6 +58,7 @@ const char LabelX[]="0ABCDEFGHJ";
 typedef struct MCS_node{
     struct MCS_node* parent;
     double win;
+    double win2;
     int visit;
 	int move;
     int turn;
@@ -477,7 +478,8 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
     MCSNODE root_node;
    // cout << root_node << endl;
     root_node.parent = NULL;
-    root_node.win = 0;
+    root_node.win = 0.0;
+    root_node.win2 = 0.0;
     root_node.visit = 0;
 	root_node.move = 0;
     root_node.turn = turn;
@@ -496,8 +498,7 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 	int CurBoard[BOUNDARYSIZE][BOUNDARYSIZE];
 	vector<int> rand_array;
 	for(int i=0;i<BOARDSIZE*BOARDSIZE;i++)rand_array.push_back(10*(i/9)+i%9+11);
-	double score;
-	int BorW,visit,win,total_visit,total_win;
+	double score, visit, win, win2, total_visit, total_win, total_win2;
 	
     while(clock() < end_t){
 		depth = game_length;
@@ -515,15 +516,18 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
                 }
             }
             cur_node = &(cur_node -> child[best_child]);
+            record(cur_node -> Board, GameRecord, depth);
 			depth ++;
         }
         //expansion
 		//cerr << "expansion";
-        num_legal_moves = gen_legal_move(cur_node -> Board, cur_node -> turn, game_length, GameRecord, MoveList);
+        num_legal_moves = gen_legal_move(cur_node -> Board, cur_node -> turn, depth, GameRecord, MoveList);
+        if(num_legal_moves == 0) break;
         for(int i=0;i<num_legal_moves;i++){
             MCSNODE new_node;
             new_node.parent = cur_node;
-            new_node.win = 0;
+            new_node.win = 0.0;
+            new_node.win2 = 0.0;
             new_node.visit = 0;
 			new_node.move = MoveList[i];
             for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)new_node.Board[x][y] = cur_node -> Board[x][y];
@@ -534,11 +538,13 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
     
         //simulation
 		//cerr << "simulation";
-        total_visit = 0; total_win = 0;
+        total_visit = 0.0; total_win = 0.0; total_win2 = 0.0;
 		for(int i=0;i<cur_node -> child.size();i++){
-                win = 0;visit = 0;
+                visit = 0.0; win = 0.0; win2 = 0.0;
 				for(int j=0;j<ONCESIMULATE;j++){
 				    for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)CurBoard[x][y] = cur_node -> child[i].Board[x][y];
+                    gtp_showboard(CurBoard);
+                    getchar();getchar();
 				    turn = cur_node -> child[i].turn;
                     move[0] = -1; move[1] = -1;
                     tmp_depth = depth;
@@ -559,22 +565,55 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 						turn = (turn%2)+1;
 						tmp_depth ++;
 					}while(!(move[0]==0&&move[1]==0) && tmp_depth < HISTORYLENGTH);
-					if(final_score(CurBoard)>0) win = win + 1;
+                    gtp_showboard(CurBoard);
+                    getchar();getchar();
+                    score = final_score(CurBoard);
+                    cerr << "score = " << score;
+					if(score > 17){
+                        win = win + 1.0;
+                        win2 = win2 + 1.0;
+                    }
+                    else if(score > 7){
+                        win = win + 0.75;
+                        win2 = win2 + 0.5625;
+                    }
+                    else if(score > -3){
+                        win = win + 0.5;
+                        win2 = win2 + 0.25;
+                    }
+                    else{
+                        win = win + 0.25;
+                        win2 = win2 + 0.0625;
+                    }
 					visit = visit + 1;
+                    cerr << "test" ;
 				}
                 //cerr << "expansion: win = " << win << ",visit = " << visit <<;
-				if(cur_node -> child[i].turn == BLACK) cur_node -> child[i].win = win;
-                else cur_node -> child[i].win = visit - win;
+				if(cur_node -> child[i].turn == BLACK){
+                    cur_node -> child[i].win = win;
+                    cur_node -> child[i].win2 = win2;
+                }
+                else{
+                    cur_node -> child[i].win = visit - win;
+                    cur_node -> child[i].win2 = visit - 2*win + win2;
+                }
 				cur_node -> child[i].visit = visit;
                 total_win = total_win + win;
+                total_win2 = total_win2 + win2;
                 total_visit = total_visit + visit;
 		}
 		
         //back propagation 
 		//cerr << "propagation" << endl;
 		while(cur_node != NULL){
-			if(cur_node -> turn == BLACK) cur_node -> win = cur_node -> win + total_win;
-			else cur_node -> win = cur_node -> win + total_visit - total_win;
+			if(cur_node -> turn == BLACK){
+                cur_node -> win = cur_node -> win + total_win;
+                //cur_node -> win2 = cur_node -> win2 + total_win2;
+            }
+			else{
+                cur_node -> win = cur_node -> win + total_visit - total_win;
+                //cur_node -> win2 = cur_node -> win2 + total_visit - 2*total_win + total_win2;
+            }
 			cur_node -> visit = cur_node -> visit + total_visit;
             if(cur_node -> parent == NULL){
                 break;
@@ -582,6 +621,7 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 			cur_node = cur_node -> parent;
 		}
     }
+    if(root_node.child.size()==0)return 0;
 	double best_score = root_node.child[0].win;
 	int return_move = root_node.child[0].move;
 	for(int i=0;i<root_node.child.size();i++){
@@ -589,7 +629,6 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 			return_move = root_node.child[i].move;
 	}
     return return_move;
-    return 0;
 }
 /*
  * This function update the Board with put 'turn' at (x,y)
