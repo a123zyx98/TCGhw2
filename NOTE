@@ -1,1 +1,1 @@
-gogui-twogtp -white randogo99.exe -black MCSgo.exe -games 10 -alternate -size 9 -komi 7 -verbose -auto
+gogui-twogtp -white randogo99.exe -black MCSgo.exe -games 10 -alternate -size 9 -komi 7 -verbose -sgffile -auto
