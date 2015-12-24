@@ -21,10 +21,10 @@
 #define COMMANDLENGTH 1000
 #define DEFAULTTIME     10
 #define SIMULATETIME     1
-#define ONCESIMULATE    10
+#define ONCESIMULATE    20
 #define DEFAULTKOMI      7
 
-#define SAFEMOVE         5
+#define SAFEMOVE        10
 #define UCBCONSTANT      2
 
 #define MAXGAMELENGTH 1000
@@ -32,7 +32,7 @@
 #define MAXDIRECTION     4
 
 #define NUMINTERSECTION 81
-#define HISTORYLENGTH   200
+#define HISTORYLENGTH  200
 
 #define EMPTY            0
 #define BLACK            1
@@ -240,20 +240,20 @@ int update_board_check(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int X, int Y, int 
     legal_flag = 1;
     }
     else {
-    // Condition 2: there is a self string has more than one liberty
-    for (int d = 0; d < MAXDIRECTION; ++d) {
-        if (NeighboorhoodState[d] == SELF && Liberties[d] > 1) {
-        legal_flag = 1;
-        }
-    }
-    if (legal_flag == 0) {
-    // Condition 3: there is a opponent string has exactly one liberty
+        // Condition 2: there is a self string has more than one liberty
         for (int d = 0; d < MAXDIRECTION; ++d) {
-        if (NeighboorhoodState[d] == OPPONENT && Liberties[d] == 1) {
+            if (NeighboorhoodState[d] == SELF && Liberties[d] > 1) {
             legal_flag = 1;
+            }
         }
+        if (legal_flag == 0) {
+        // Condition 3: there is a opponent string has exactly one liberty
+            for (int d = 0; d < MAXDIRECTION; ++d) {
+            if (NeighboorhoodState[d] == OPPONENT && Liberties[d] == 1) {
+                legal_flag = 1;
+            }
+            }
         }
-    }
     }
 
     if (legal_flag == 1) {
@@ -261,8 +261,9 @@ int update_board_check(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int X, int Y, int 
         if (num_neighborhood_oppo != 0) {
             for (int d = 0 ; d < MAXDIRECTION; ++d) {
                 // check if there is opponent component only one liberty
-                if (NeighboorhoodState[d] == OPPONENT && Liberties[d] == 1 && Board[X+DirectionX[d]][Y+DirectionY[d]]!=EMPTY)
+                if (NeighboorhoodState[d] == OPPONENT && Liberties[d] == 1 && Board[X+DirectionX[d]][Y+DirectionY[d]]!=EMPTY){
                     remove_piece(Board, X+DirectionX[d], Y+DirectionY[d], Board[X+DirectionX[d]][Y+DirectionY[d]]);
+                }
             }
         }
         Board[X][Y] = turn;
@@ -470,7 +471,7 @@ int MCS_pure_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int num_legal_moves, in
 }
 int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, int game_length,int GameRecord[MAXGAMELENGTH][BOUNDARYSIZE][BOUNDARYSIZE]){
     
-	int depth;
+	int depth,tmp_depth,count = 0;
     
     MCSNODE* cur_node;
     MCSNODE root_node;
@@ -525,9 +526,9 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
             new_node.win = 0;
             new_node.visit = 0;
 			new_node.move = MoveList[i];
-            new_node.turn = (cur_node -> turn%2)+1;
             for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)new_node.Board[x][y] = cur_node -> Board[x][y];
-            do_move(new_node.Board, new_node.turn, new_node.move);
+            do_move(new_node.Board, cur_node -> turn, new_node.move);
+            new_node.turn = (cur_node -> turn%2)+1;
             cur_node -> child.push_back(new_node);
         }
     
@@ -535,25 +536,29 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 		//cerr << "simulation";
         total_visit = 0; total_win = 0;
 		for(int i=0;i<cur_node -> child.size();i++){
-				turn = cur_node -> child[i].turn;
-				for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)CurBoard[x][y] = cur_node -> child[i].Board[x][y];
                 win = 0;visit = 0;
 				for(int j=0;j<ONCESIMULATE;j++){
+				    for(int x=0;x<BOUNDARYSIZE;x++)for(int y=0;y<BOUNDARYSIZE;y++)CurBoard[x][y] = cur_node -> child[i].Board[x][y];
+				    turn = cur_node -> child[i].turn;
+                    move[0] = -1; move[1] = -1;
+                    tmp_depth = depth;
+                    count ++;
 					do{
 						random_shuffle(rand_array.begin(), rand_array.end());
 						move_check = false;
 						for(int i=0;i<rand_array.size();i++){
-								if(move[turn] == rand_array[i]) continue;
+							if(move[turn] == rand_array[i]) continue;
 							if((update_board_check(CurBoard, rand_array[i]/10, rand_array[i]%10, turn))==1){
 								move_check = true;
 								move[turn] = rand_array[i];
 								break;
 							}
 						}
-						if(!move_check)move[turn] = 0;
+						if(!move_check)
+                            move[turn] = 0;
 						turn = (turn%2)+1;
-						depth ++;
-					}while(!(move[0]==0&&move[1]==0) && depth < HISTORYLENGTH);
+						tmp_depth ++;
+					}while(!(move[0]==0&&move[1]==0) && tmp_depth < HISTORYLENGTH);
 					if(final_score(CurBoard)>0) win = win + 1;
 					visit = visit + 1;
 				}
@@ -565,7 +570,6 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
                 total_visit = total_visit + visit;
 		}
 		
-        //cerr << "win = " << total_win << "visit = " << total_visit << endl;
         //back propagation 
 		//cerr << "propagation" << endl;
 		while(cur_node != NULL){
@@ -578,7 +582,6 @@ int MCTS_move(int Board[BOUNDARYSIZE][BOUNDARYSIZE], clock_t end_t, int turn, in
 			cur_node = cur_node -> parent;
 		}
     }
-    //cerr << "done" << endl;
 	double best_score = root_node.child[0].win;
 	int return_move = root_node.child[0].move;
 	for(int i=0;i<root_node.child.size();i++){
@@ -628,6 +631,9 @@ int genmove(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int turn, int time_limit, int
 
     //num_legal_moves = gen_legal_move(Board, turn, game_length, GameRecord, MoveList);
     
+    for(int i=0;i<BOUNDARYSIZE;i++){
+        Board[0][i] = Board[BOUNDARYSIZE-1][i] = Board[i][0] = Board[i][BOUNDARYSIZE-1] = BOUNDARY;
+    }
     return_move = MCTS_move(Board, end_t, turn, game_length, GameRecord);
     //return_move = rand_pick_move(num_legal_moves, MoveList);
     //return_move = MCS_pure_move(Board,num_legal_moves, MoveList, end_t, turn, game_length, GameRecord);
@@ -765,7 +771,7 @@ void gtp_boardsize(int size) {
     }
     else {
     _board_size = size;
-    cout << "= "<<endl<<endl;
+   cout << "= "<<endl<<endl;
     }
 }
 void gtp_clear_board(int Board[BOUNDARYSIZE][BOUNDARYSIZE], int NumCapture[]) {
@@ -899,7 +905,6 @@ void gtp_main(int display) {
         }
         gtp_final_score(Board);
     }
-    cerr << "game_length = " << game_length << endl;
     }
 }
 int main(int argc, char* argv[]) {
