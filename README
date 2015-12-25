@@ -1,0 +1,2 @@
+#compile
+g++ MCSgo.cpp -O3 -o MCSgo
